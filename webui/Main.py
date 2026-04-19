@@ -24,12 +24,14 @@ from app.models.schema import (
 )
 from app.services import channel as channel_service
 from app.services import idea as idea_service
+from app.services import video_entity as video_entity_service
 from app.services import llm, voice
 from app.services import task as tm
 from app.utils import utils
 
 channel_service.init_db()
 idea_service.init_db()
+video_entity_service.init_db()
 
 st.set_page_config(
     page_title="MoneyPrinterTurbo",

@@ -44,7 +44,8 @@ The services layer is the heart of the app. Each service is a module of plain fu
 | `subtitle.py` | Speech-to-text fallback when TTS subtitles aren't available — uses faster-whisper. |
 | `state.py` | `BaseState` interface + `MemoryState` (dict-backed) and `RedisState` implementations. The module-level `state` singleton at line 152 is chosen at import time based on `config.app["enable_redis"]`. |
 | `channel.py` | Channel profile persistence in SQLite (`storage/data/channels.db`). Dict-based CRUD; JSON fields (`content_notes`, `voice_config`, `music_config`, `video_source_config`, `youtube_config`) are auto-serialized/parsed via `_JSON_FIELDS`. **Known quirk:** `create_channel` returns `None` because `get_channel(lastrowid)` runs before the `with conn:` block commits — rows persist correctly, but re-read via `get_channel_by_slug` / `get_channel` after the call returns. |
-| `idea.py` | Two concerns in one module: (1) LLM-driven idea generation — `generate_ideas(channel, topic_hint="", count=3)` returns a list of `{title, description}` dicts by prompting the configured LLM. The prompt asks for a plain-text `TITLE:` / `DESCRIPTION:` format (blank line between ideas, no JSON/markdown/numbering) — chosen over JSON because LLMs frequently produce invalid JSON with unescaped inner quotes (e.g. `"слово "в кавычках"."`). `_parse_ideas_response` tries the plain-text format first, falls back to JSON parsing, then to a single-item fallback with the raw response. (2) SQLite persistence in the same `channels.db` file — `ideas` table with `save_idea(channel_id, title, description, seed_prompt)`, `list_saved_ideas(channel_id)`, `get_idea(id)`, `delete_idea(id)`. `save_idea` returns the data it inserted directly (no re-read), sidestepping the commit-timing quirk that bites `channel.create_channel`. Both `init_db()` calls (channel + idea) run from `app/asgi.py` startup and from the top of `webui/Main.py`. |
+| `idea.py` | Two concerns in one module: (1) LLM-driven idea generation — `generate_ideas(channel, topic_hint="", count=3)` returns a list of `{title, description}` dicts by prompting the configured LLM. The prompt asks for a plain-text `TITLE:` / `DESCRIPTION:` format (blank line between ideas, no JSON/markdown/numbering) — chosen over JSON because LLMs frequently produce invalid JSON with unescaped inner quotes (e.g. `"слово "в кавычках"."`). `_parse_ideas_response` tries the plain-text format first, falls back to JSON parsing, then to a single-item fallback with the raw response. (2) SQLite persistence in the same `channels.db` file — `ideas` table with `save_idea(channel_id, title, description, seed_prompt)`, `list_saved_ideas(channel_id)`, `get_idea(id)`, `delete_idea(id)`. `save_idea` returns the data it inserted directly (no re-read), sidestepping the commit-timing quirk that bites `channel.create_channel`. |
+| `video_entity.py` | Persistence layer for **per-video records** (not to be confused with `video.py`, which is MoviePy composition). SQLite `videos` table in `channels.db`; CRUD: `create_video`, `get_video`, `list_videos(channel_id=None, status=None)`, `update_video(**fields)`, `update_status(id, status, error="", video_path="")`, `delete_video`. Status values are constants on the module: `VIDEO_STATUS_IDEA` / `_CONFIGURED` / `_IN_PROGRESS` / `_COMPLETED` / `_FAILED` (also exported as a `VIDEO_STATUSES` set). Invalid status values raise `ValueError`. `update_status` auto-clears `error` on any non-failed transition and preserves `video_path` when only the status changes. Like `save_idea`, `create_video` returns the inserted row directly to sidestep the commit-timing quirk. All three `init_db()` calls (channel + idea + video_entity) run from `app/asgi.py` startup and from the top of `webui/Main.py`. |
 | `upload_post.py` | Upload finished videos to external platforms (used by `task.py` post-pipeline). |
 
 ## Task manager vs. state
@@ -72,7 +73,7 @@ These are two different abstractions — easy to confuse:
 ## Storage layout
 
 - `storage/tasks/{task_id}/` — per-task working directory: `script.json`, TTS audio, subtitle SRTs, intermediate clips, final `final-*.mp4`. Mounted at `/tasks` for static serving.
-- `storage/data/channels.db` — SQLite DB holding both `channels` and `ideas` tables. Created lazily at startup via `channel_service.init_db()` + `idea_service.init_db()` (same file, two schemas).
+- `storage/data/channels.db` — SQLite DB holding `channels`, `ideas`, and `videos` tables. Created lazily at startup via `channel_service.init_db()` + `idea_service.init_db()` + `video_entity_service.init_db()` (same file, three schemas).
 - `public/` — served at `/` (docs/assets).
 
 ### `ideas` table
@@ -87,6 +88,33 @@ These are two different abstractions — easy to confuse:
 | `created_at` | TEXT NOT NULL | ISO-8601 UTC |
 
 Deleting a channel does **not** cascade-delete its ideas. If that becomes an issue, enable `PRAGMA foreign_keys = ON` in `_get_conn` and add `FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE`.
+
+### `videos` table
+
+Tracks the lifecycle of each video a user generates, from idea capture through pipeline completion or failure.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK AUTOINCREMENT | |
+| `channel_id` | INTEGER NOT NULL | References `channels.id` (no FK constraint). |
+| `idea_id` | INTEGER NULL | Optional reference to `ideas.id` when the video was spawned from a saved idea. |
+| `title` | TEXT NOT NULL | Human-readable title shown to the user; typically the idea title if spawned from one. |
+| `video_config` | TEXT NOT NULL `'{}'` | **JSON** — snapshot of the pipeline params (aspect, voice, music, source, etc.) used for this specific run. Separate from the channel's default configs so re-runs with different overrides don't lose history. |
+| `video_path` | TEXT NOT NULL `''` | Filesystem path to the final MP4 once `status = completed`. Empty until then. Preserved across later state transitions. |
+| `status` | TEXT NOT NULL `'idea'` | One of: `idea`, `configured`, `in_progress`, `completed`, `failed`. Validated by `VIDEO_STATUSES` constant. |
+| `error` | TEXT NOT NULL `''` | Populated only when `status = failed`; auto-cleared on any non-failed transition by `update_status()`. |
+| `task_id` | TEXT NOT NULL `''` | Optional link to the in-flight pipeline task id (the `state.update_task` key) — lets the record correlate with live progress. |
+| `created_at` / `updated_at` | TEXT NOT NULL | ISO-8601 UTC. |
+
+Intended lifecycle:
+
+```
+idea ──► configured ──► in_progress ──► completed
+                                   └──► failed (error populated)
+                                              └──► in_progress (retry, error cleared)
+```
+
+Not yet exposed via API or WebUI — the service is a pure data layer. Pipeline integration (calling `update_status` from inside `task.start()`) is a follow-up.
 
 ## Key patterns
 
