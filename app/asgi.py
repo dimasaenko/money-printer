@@ -79,4 +79,8 @@ def shutdown_event():
 
 @app.on_event("startup")
 def startup_event():
+    from app.services import channel as channel_service
+    from app.services import idea as idea_service
+    channel_service.init_db()
+    idea_service.init_db()
     logger.info("startup event")

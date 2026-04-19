@@ -1,0 +1,45 @@
+# Example: fully-filled channel.yaml — use as a shape reference when running /video-channel.
+# This is illustrative only. Slugs are the identity; no `id` field. All optional
+# config blocks are populated here; in real files any of them may be `null` if
+# the user skipped them.
+
+name: facts-about-animals
+slug: facts-about-animals
+niche: "Surprising animal facts & behaviors — short, shareable facts about unusual or surprising animal behaviors, adaptations, and trivia."
+target_audience: "Families & kids (7-14); kid-friendly phrasing and content choices."
+tone: "Fun, punchy, surprising. Energetic narration with emphasis on the 'wow' factor."
+content_notes:
+  - "Fact accuracy: only verified zoological facts. For disputed claims (e.g. purring frequencies healing bones), frame as 'scientists think…' rather than fact."
+  - "Safety for kids: no graphic predator kills, death beats, or scary imagery. Never suggest approaching or feeding wild animals."
+  - "Reading level: short sentences, active voice, grade 4-5. One idea per sentence."
+  - "Attention pacing: front-load the wow in the first 5 seconds; end every scene on a small surprise or cliffhanger."
+  - "Biology/scientific jargon: limit to 1-2 'bonus terms' per video, always paired with an instant plain-English translation."
+  - "Second-person framing: speak directly to the viewer ('your cat…', 'imagine you…')."
+  - "Numbers with comparisons: anchor figures to something kids know ('higher than a dog whistle'). Round large numbers."
+  - "No emojis in voiceover text (TTS can't speak them). Emojis are fine only in the YouTube description."
+  - "Inclusive language: avoid assumed family structures ('your dad') or region-specific references."
+language: en
+video_length_preset: medium   # short | medium | long
+status: active                # active | paused | archived
+created_at: '2026-04-18T00:00:00+00:00'
+updated_at: '2026-04-18T13:43:21+00:00'
+
+voice_config:
+  provider: elevenlabs         # elevenlabs | openai
+  voice_id: null               # string or null until a preset is selected
+  speed: 1.05                  # 0.5 – 2.0
+  stability: 0.4               # 0.0 – 1.0 (ElevenLabs only)
+
+music_config:
+  style: "Upbeat, playful, family-friendly"
+  volume: 0.15                 # 0.0 – 1.0
+  auto_duck: true
+  source: local                # local | api
+
+video_source_config:
+  primary_provider: pexels     # pexels | pixabay | runway | kling
+  fallback_provider: pixabay   # pexels | pixabay | null
+  orientation: landscape       # landscape | portrait
+  min_resolution: 1080p        # 720p | 1080p | 4k
+
+youtube_config: null           # usually null — OAuth setup is out of scope for /video-channel

@@ -33,3 +33,11 @@ debug/
 debug_*.py
 test_*.py
 streamlit.log
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Claude Code local machine settings (keep /commands tracked)
+.claude/settings.local.json

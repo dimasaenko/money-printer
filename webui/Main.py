@@ -22,9 +22,14 @@ from app.models.schema import (
     VideoParams,
     VideoTransitionMode,
 )
+from app.services import channel as channel_service
+from app.services import idea as idea_service
 from app.services import llm, voice
 from app.services import task as tm
 from app.utils import utils
+
+channel_service.init_db()
+idea_service.init_db()
 
 st.set_page_config(
     page_title="MoneyPrinterTurbo",
@@ -69,6 +74,10 @@ if "ui_language" not in st.session_state:
 if "local_video_materials" not in st.session_state:
     # 记住用户最近一次已经落盘的本地素材，避免仅修改文案后二次生成时丢失素材列表。
     st.session_state["local_video_materials"] = []
+if "selected_channel_id" not in st.session_state:
+    st.session_state["selected_channel_id"] = None
+if "channel_ideas" not in st.session_state:
+    st.session_state["channel_ideas"] = []
 
 # 加载语言文件
 locales = utils.load_locales(i18n_dir)
@@ -482,6 +491,170 @@ if not config.app.get("hide_config", False):
             save_keys_to_config("pixabay_api_keys", pixabay_api_key)
 
 llm_provider = config.app.get("llm_provider", "").lower()
+
+# --- Channel selector + info ---
+_channels = channel_service.list_channels(status="active")
+_channel_options = [("— " + tr("No channel") + " —", None)] + [
+    (f"{c['name']} ({c['slug']})", c["id"]) for c in _channels
+]
+
+with st.container(border=True):
+    _current_ch_idx = 0
+    for _i, (_, _cid) in enumerate(_channel_options):
+        if _cid == st.session_state["selected_channel_id"]:
+            _current_ch_idx = _i
+            break
+    _selected_ch_idx = st.selectbox(
+        tr("Channel"),
+        options=range(len(_channel_options)),
+        index=_current_ch_idx,
+        format_func=lambda i: _channel_options[i][0],
+        key="channel_selector",
+    )
+    _new_channel_id = _channel_options[_selected_ch_idx][1]
+    if _new_channel_id != st.session_state["selected_channel_id"]:
+        st.session_state["selected_channel_id"] = _new_channel_id
+        st.session_state["channel_ideas"] = []
+
+    _selected_channel = None
+    if st.session_state["selected_channel_id"]:
+        _selected_channel = channel_service.get_channel(
+            st.session_state["selected_channel_id"]
+        )
+
+    if _selected_channel:
+        _ch = _selected_channel
+        _summary = _ch.get("niche", "")
+        _summary_short = (_summary[:90] + "…") if len(_summary) > 90 else _summary
+        with st.expander(
+            f"📺  {_ch['name']} — {_summary_short}",
+            expanded=False,
+        ):
+            st.markdown(f"**{tr('Niche')}:** {_ch.get('niche', '')}")
+            st.markdown(f"**{tr('Target audience')}:** {_ch.get('target_audience', '')}")
+            st.markdown(f"**{tr('Tone')}:** {_ch.get('tone', '')}")
+            st.markdown(
+                f"**{tr('Language')}:** `{_ch.get('language', 'en')}`  ·  "
+                f"**{tr('Video length preset')}:** `{_ch.get('video_length_preset', 'medium')}`"
+            )
+            _notes = _ch.get("content_notes") or []
+            if _notes:
+                st.markdown(f"**{tr('Content notes')}:**")
+                for _n in _notes:
+                    st.markdown(f"- {_n}")
+            _vc = _ch.get("voice_config") or {}
+            _mc = _ch.get("music_config") or {}
+            _vs = _ch.get("video_source_config") or {}
+            _cfg_cols = st.columns(3)
+            with _cfg_cols[0]:
+                st.markdown(
+                    f"**{tr('Voice config')}**\n\n"
+                    f"- provider: `{_vc.get('provider', '')}`\n"
+                    f"- voice: `{_vc.get('voice_id', '')}`\n"
+                    f"- speed: `{_vc.get('speed', '')}`"
+                )
+            with _cfg_cols[1]:
+                st.markdown(
+                    f"**{tr('Music config')}**\n\n"
+                    f"- style: {_mc.get('style', '')}\n"
+                    f"- volume: `{_mc.get('volume', '')}`\n"
+                    f"- source: `{_mc.get('source', '')}`"
+                )
+            with _cfg_cols[2]:
+                st.markdown(
+                    f"**{tr('Video source config')}**\n\n"
+                    f"- primary: `{_vs.get('primary_provider', '')}`\n"
+                    f"- fallback: `{_vs.get('fallback_provider', '')}`\n"
+                    f"- orientation: `{_vs.get('orientation', '')}`"
+                )
+
+
+# --- Video Ideas panel (visible only when a channel is selected) ---
+if _selected_channel:
+    with st.container(border=True):
+        st.subheader(tr("Video Ideas"))
+
+        _gen_cols = st.columns([4, 1])
+        with _gen_cols[0]:
+            _idea_seed = st.text_input(
+                tr("Idea seed prompt (optional)"),
+                value=st.session_state.get("idea_seed", ""),
+                key="idea_seed_input",
+                placeholder=tr("e.g. morning routines, sleep tips, burnout recovery"),
+            )
+            st.session_state["idea_seed"] = _idea_seed
+        with _gen_cols[1]:
+            st.write("")
+            st.write("")
+            if st.button(
+                tr("Generate Ideas"),
+                use_container_width=True,
+                key="generate_ideas_btn",
+            ):
+                with st.spinner(tr("Generating ideas")):
+                    st.session_state["channel_ideas"] = idea_service.generate_ideas(
+                        _selected_channel, topic_hint=_idea_seed, count=3
+                    )
+
+        if st.session_state.get("channel_ideas"):
+            st.markdown(f"**{tr('New ideas')}:**")
+            _new_hdr = st.columns([3, 5, 1])
+            _new_hdr[0].caption(tr("Title"))
+            _new_hdr[1].caption(tr("Description"))
+            for _i, _idea in enumerate(list(st.session_state["channel_ideas"])):
+                _new_cols = st.columns([3, 5, 1])
+                with _new_cols[0]:
+                    st.markdown(f"**{_idea.get('title', '')}**")
+                with _new_cols[1]:
+                    st.markdown(_idea.get("description", ""))
+                with _new_cols[2]:
+                    if st.button(tr("Save"), key=f"save_idea_{_i}", use_container_width=True):
+                        idea_service.save_idea(
+                            channel_id=_selected_channel["id"],
+                            title=_idea.get("title", ""),
+                            description=_idea.get("description", ""),
+                            seed_prompt=_idea_seed,
+                        )
+                        st.session_state["channel_ideas"].pop(_i)
+                        st.rerun()
+
+        st.divider()
+        _saved_ideas = idea_service.list_saved_ideas(_selected_channel["id"])
+        if _saved_ideas:
+            st.markdown(f"**{tr('Saved ideas')}:**")
+            _saved_hdr = st.columns([3, 5, 1, 1])
+            _saved_hdr[0].caption(tr("Title"))
+            _saved_hdr[1].caption(tr("Description"))
+            for _s in _saved_ideas:
+                _saved_cols = st.columns([3, 5, 1, 1])
+                with _saved_cols[0]:
+                    st.markdown(f"**{_s['title']}**")
+                with _saved_cols[1]:
+                    st.markdown(_s.get("description", ""))
+                    if _s.get("seed_prompt"):
+                        st.caption(f"↳ {_s['seed_prompt']}")
+                with _saved_cols[2]:
+                    if st.button(
+                        tr("Use"),
+                        key=f"use_saved_{_s['id']}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["video_subject"] = _s["title"]
+                        st.session_state["video_script"] = ""
+                        st.session_state["video_terms"] = ""
+                        st.rerun()
+                with _saved_cols[3]:
+                    if st.button(
+                        tr("Delete"),
+                        key=f"delete_saved_{_s['id']}",
+                        use_container_width=True,
+                    ):
+                        idea_service.delete_idea(_s["id"])
+                        st.rerun()
+        else:
+            st.caption(tr("No saved ideas yet"))
+
+
 panel = st.columns(3)
 left_panel = panel[0]
 middle_panel = panel[1]
