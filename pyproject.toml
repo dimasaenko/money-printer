@@ -1,6 +1,7 @@
-# 说明：
-# 1. 主依赖来源统一收敛到 pyproject.toml。
-# 2. 运行环境通过 uv.lock 固定，避免不同机器解析出不同版本组合。
+# Notes:
+# 1. The primary source of dependencies is consolidated into pyproject.toml.
+# 2. The runtime environment is pinned via uv.lock so that different machines
+#    do not resolve to different version combinations.
 [build-system]
 requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
@@ -37,5 +38,6 @@ dependencies = [
 packages = ["app"]
 
 [tool.uv]
-# 当前项目以应用运行形态为主，不作为可发布的 Python 包安装。
+# This project is primarily run as an application, not installed as a
+# publishable Python package.
 package = false

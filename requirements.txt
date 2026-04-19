@@ -1,4 +1,5 @@
-# 兼容旧的 pip 安装方式；主依赖定义已迁移到 pyproject.toml / uv.lock。
+# Kept for backward compatibility with pip-based installs; the primary
+# dependency definitions have moved to pyproject.toml / uv.lock.
 moviepy==2.1.2
 streamlit==1.45.0
 edge_tts==7.2.7

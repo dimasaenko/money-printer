@@ -17,9 +17,9 @@ _DEPRECATED_GEMINI_MODELS = {"gemini-pro", "gemini-1.0-pro"}
 
 
 def _normalize_text_response(content, llm_provider: str) -> str:
-    # 不同 LLM SDK 在异常或被拦截场景下，可能返回 None、空字符串，
-    # 甚至返回非字符串对象。这里统一做兜底校验，避免后续直接调用
-    # `.replace()` 时抛出 `NoneType` 之类的属性错误。
+    # Different LLM SDKs can return None, an empty string, or even a non-string object when a
+    # request errors out or is blocked. Validate defensively here so later calls like `.replace()`
+    # don't raise attribute errors such as `NoneType has no attribute ...`.
     if content is None:
         raise ValueError(f"[{llm_provider}] returned empty text content")
 
@@ -36,10 +36,9 @@ def _normalize_text_response(content, llm_provider: str) -> str:
 
 
 def _extract_chat_completion_text(response, llm_provider: str) -> str:
-    # OpenAI 兼容接口在异常场景下，可能返回没有 choices、
-    # 或者 choices/message/content 为空的响应对象。
-    # 这里统一做结构校验，避免出现 `NoneType is not subscriptable`
-    # 这类底层属性访问错误。
+    # In error scenarios, OpenAI-compatible endpoints can return a response object with no
+    # choices, or with empty choices/message/content. Validate the structure here to avoid
+    # low-level attribute access errors like `NoneType is not subscriptable`.
     choices = getattr(response, "choices", None)
     if not choices:
         raise ValueError(f"[{llm_provider}] returned empty choices")
@@ -98,8 +97,8 @@ def _generate_response(prompt: str) -> str:
                 api_key = config.app.get("gemini_api_key")
                 model_name = config.app.get("gemini_model_name")
                 base_url = config.app.get("gemini_base_url", "")
-                # Gemini 旧模型名已经陆续下线，这里自动兼容历史配置，
-                # 避免用户沿用旧值时直接收到 404。
+                # Older Gemini model names are being retired; auto-handle legacy configs here
+                # so users who kept the old values don't get a 404 immediately.
                 if not model_name:
                     model_name = _DEFAULT_GEMINI_MODEL
                 elif model_name in _DEPRECATED_GEMINI_MODELS:
@@ -522,7 +521,7 @@ Please note that you must use English for generating video search terms; Chinese
 
 
 if __name__ == "__main__":
-    video_subject = "生命的意义是什么"
+    video_subject = "What is the meaning of life"
     script = generate_script(
         video_subject=video_subject, language="zh-CN", paragraph_number=1
     )

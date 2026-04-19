@@ -1,6 +1,6 @@
-# 2026-04-02 PR 合并与验证记录
+# 2026-04-02 PR Merge and Verification Record
 
-## 本次已合并并推送的 PR
+## PRs merged and pushed in this round
 
 - `#837` `fix: update google-generativeai version for response_modalities support`
 - `#835` `fix: add missing pydub dependency to requirements.txt`
@@ -10,111 +10,111 @@
 - `#848` `feat: support GPU acceleration for faster-whisper in Docker`
 - `#843` `feat: Add Upload-Post integration for cross-posting to TikTok/Instagram`
 
-## 合并后的主线提交
+## Main-branch commits after merging
 
-- TTS 与字幕修复基线提交：`953a6c0` `fix: restore edge tts synthesis and readable subtitles`
-- 当前主线提交：`1f8a746`
+- TTS and subtitle fix baseline commit: `953a6c0` `fix: restore edge tts synthesis and readable subtitles`
+- Current main-branch commit: `1f8a746`
 
-## 合并时的验证结论
+## Verification results at merge time
 
-### 已通过
+### Passed
 
 - `#837`
-  - 依赖升级后可正常导入
-  - `google-generativeai==0.8.6` 已生效
+  - Imports correctly after the dependency upgrade
+  - `google-generativeai==0.8.6` is in effect
 - `#835`
-  - `pydub==0.25.1` 已生效
+  - `pydub==0.25.1` is in effect
 - `#850`
-  - `subtitle_position` 与 `custom_position` 可从配置文件读取
+  - `subtitle_position` and `custom_position` can be read from the configuration file
 - `#838`
-  - MiniMax provider 接线正常
-  - 使用 mock 调用验证 `_generate_response` 通过
+  - MiniMax provider wiring is functional
+  - Verified `_generate_response` using a mocked call
 - `#811`
-  - 主线导入正常
-  - 抽样单测通过
+  - Main branch imports correctly
+  - Sampled unit tests pass
 - `#848`
-  - `docker compose -f docker-compose.yml -f docker-compose.gpu.yml config` 可正常解析
+  - `docker compose -f docker-compose.yml -f docker-compose.gpu.yml config` parses correctly
 - `#843`
-  - Upload-Post 服务导入和 mock 上传调用通过
-  - 与前面 PR 叠加时仅在 `config.example.toml` 存在配置段落冲突，已手工保留两边内容
+  - Upload-Post service imports and mocked upload call both pass
+  - When layered with earlier PRs there was only a configuration section conflict in `config.example.toml`; manually preserved content from both sides
 
-### 已拒绝并关闭
+### Rejected and closed
 
 - `#852`
-  - 能恢复音频，但会破坏字幕链路，并删除仍被 WebUI 调用的 Gemini 逻辑
+  - Restores audio but breaks the subtitle pipeline and removes Gemini logic still called from the WebUI
 - `#787`
-  - 不能解决当前 `403` 场景
+  - Does not resolve the current `403` scenario
 - `#841`
-  - 与当前主线 TTS/字幕修复冲突，且收益已被更小 PR 覆盖
+  - Conflicts with the current main-branch TTS/subtitle fixes; its benefits are already covered by smaller PRs
 - `#824`
-  - ModelsLab 路径能出音频，但字幕链路失败，无法产出可用 SRT
+  - The ModelsLab path can produce audio but its subtitle pipeline fails, so a usable SRT cannot be produced
 - `#840`
-  - 后端加入 `video_source="ai"`，但 WebUI 仍不支持该值，端到端不可用
+  - Adds `video_source="ai"` on the backend, but the WebUI does not yet support that value, so end-to-end is unusable
 - `#826`
-  - 与当前主线 `voice.py` 和依赖变更冲突，未通过合并验证
+  - Conflicts with the current main-branch `voice.py` and its dependency changes; did not pass merge verification
 - `#751`
 - `#749`
 - `#742`
 - `#705`
-  - 以上 4 个 PR 在当前主线下均为 `DIRTY`，未通过合并验证
+  - The four PRs above are all `DIRTY` against the current main branch and did not pass merge verification
 
-## 冒烟测试记录
+## Smoke test record
 
-### 服务重启
+### Service restart
 
-- API：`http://127.0.0.1:8080/docs`
-- WebUI：`http://127.0.0.1:8501`
+- API: `http://127.0.0.1:8080/docs`
+- WebUI: `http://127.0.0.1:8501`
 
-### 第一次完整视频任务
+### First full video task
 
-- 任务号：`ced0b190-dd72-489c-b978-2761740933db`
-- 结果：失败
-- 结论：
-  - API 默认 `video_transition_mode=null`
-  - 视频拼接阶段在 `app/services/video.py` 中直接访问 `video_transition_mode.value`
-  - 导致任务线程异常退出，任务状态停留在 `state=4, progress=75`
+- Task ID: `ced0b190-dd72-489c-b978-2761740933db`
+- Result: failed
+- Conclusion:
+  - The API defaults `video_transition_mode=null`
+  - The video concatenation stage in `app/services/video.py` accesses `video_transition_mode.value` directly
+  - This caused the task thread to exit abnormally, leaving the task status at `state=4, progress=75`
 
-### 第二次完整视频任务
+### Second full video task
 
-- 任务号：`8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d`
-- 提交方式：
+- Task ID: `8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d`
+- Submission:
   - `POST /api/v1/videos`
-  - 使用本地素材 `/Users/harry/Projects/Python/MoneyPrinterTurbo/test/resources/1.png`
-  - 显式指定 `video_transition_mode="FadeIn"`
-- 结果：成功
-- 任务状态：`state=1, progress=100`
+  - Used the local asset `/Users/harry/Projects/Python/MoneyPrinterTurbo/test/resources/1.png`
+  - Explicitly specified `video_transition_mode="FadeIn"`
+- Result: succeeded
+- Task status: `state=1, progress=100`
 
-### 第二次任务产物
+### Outputs from the second task
 
-- 音频：`/Users/harry/Projects/Python/MoneyPrinterTurbo/storage/tasks/8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d/audio.mp3`
-  - 时长：`8.952s`
-  - 大小：`53712 bytes`
-- 拼接视频：`/Users/harry/Projects/Python/MoneyPrinterTurbo/storage/tasks/8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d/combined-1.mp4`
-  - 时长：`9.000s`
-  - 大小：`177666 bytes`
-- 成片：`/Users/harry/Projects/Python/MoneyPrinterTurbo/storage/tasks/8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d/final-1.mp4`
-  - 时长：`9.000s`
-  - 大小：`352810 bytes`
-- 字幕：`/Users/harry/Projects/Python/MoneyPrinterTurbo/storage/tasks/8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d/subtitle.srt`
+- Audio: `/Users/harry/Projects/Python/MoneyPrinterTurbo/storage/tasks/8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d/audio.mp3`
+  - Duration: `8.952s`
+  - Size: `53712 bytes`
+- Concatenated video: `/Users/harry/Projects/Python/MoneyPrinterTurbo/storage/tasks/8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d/combined-1.mp4`
+  - Duration: `9.000s`
+  - Size: `177666 bytes`
+- Final video: `/Users/harry/Projects/Python/MoneyPrinterTurbo/storage/tasks/8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d/final-1.mp4`
+  - Duration: `9.000s`
+  - Size: `352810 bytes`
+- Subtitle: `/Users/harry/Projects/Python/MoneyPrinterTurbo/storage/tasks/8b2a0e6e-b3e6-44ab-a1b4-1865a0b4788d/subtitle.srt`
 
-### 第二次任务字幕样本
+### Subtitle sample from the second task
 
 ```srt
 1
 00:00:00,100 --> 00:00:03,300
-这是一次主线合并后的完整冒烟测试
+This is a complete smoke test after merging into the main branch
 
 2
 00:00:03,875 --> 00:00:05,350
-我们要确认语音
+We need to confirm the audio
 
 3
 00:00:05,575 --> 00:00:08,375
-字幕和视频成片都能正常生成
+Subtitles and the final video can all be generated correctly
 ```
 
-## 当前仍需关注的风险
+## Remaining risks to watch
 
-- `#843` 仅做了 mock 验证，尚未使用真实 Upload-Post 密钥联调
-- `#848` 仅验证了 Docker GPU 配置解析，尚未在真实 GPU 环境运行
-- 当前 API 默认 `video_transition_mode=null` 时，完整视频任务仍存在回归风险
+- `#843` has only been verified with mocks and has not yet been tested end-to-end with a real Upload-Post API key
+- `#848` has only been verified by parsing the Docker GPU configuration; it has not been run on a real GPU environment
+- When the API defaults `video_transition_mode=null`, the full video task still has a regression risk

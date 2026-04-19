@@ -4,7 +4,7 @@ FROM python:3.11-slim-bullseye
 # Set the working directory in the container
 WORKDIR /MoneyPrinterTurbo
 
-# 设置/MoneyPrinterTurbo目录权限为777
+# Grant 777 permissions to the /MoneyPrinterTurbo directory
 RUN chmod 777 /MoneyPrinterTurbo
 
 ENV PYTHONPATH="/MoneyPrinterTurbo"
