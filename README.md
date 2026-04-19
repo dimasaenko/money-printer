@@ -26,6 +26,98 @@
 
 </div>
 
+## Setup (this fork) 🛠️
+
+This fork adds a channel-profile + idea-generation workflow on top of the original project, and stores large font binaries (`*.ttc`) via **Git LFS**. You must have Git LFS installed before cloning, otherwise font files will come down as ~130-byte pointer stubs and subtitle rendering for CJK text will break.
+
+### Prerequisites
+
+| Tool | Why | Install (macOS / Linux) |
+|---|---|---|
+| Git LFS | Fetches the `*.ttc` fonts under `resource/fonts/` | `brew install git-lfs` then `git lfs install` |
+| Python 3.11 | Runtime | `brew install python@3.11` or pyenv |
+| uv | Primary package manager | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| ImageMagick 7.1.1+ | MoviePy subtitle rendering | `brew install imagemagick` |
+| FFmpeg | Video encoding | `brew install ffmpeg` (auto-downloaded by imageio-ffmpeg if missing) |
+
+Windows users: install Git LFS from [git-lfs.com](https://git-lfs.com/), then run `git lfs install` once.
+
+### Clone with LFS content
+
+```bash
+# The LFS hooks are enabled on first `git lfs install`, so a normal clone
+# automatically fetches the binaries. If you already cloned without LFS,
+# `git lfs pull` inside the repo will fetch them after the fact.
+
+git clone https://github.com/dimasaenko/money-printer.git
+cd money-printer
+git lfs pull          # no-op if clone already fetched LFS objects
+```
+
+Verify the fonts landed as real binaries, not pointer stubs:
+
+```bash
+ls -lh resource/fonts/STHeitiLight.ttc   # should be ~53 MB, not ~130 B
+file resource/fonts/STHeitiLight.ttc     # should NOT say "ASCII text"
+```
+
+If the file is tiny / shows `ASCII text`, you skipped `git lfs install` before cloning — run `git lfs pull` to fix it.
+
+### Install + run
+
+```bash
+# Install Python dependencies
+uv sync --frozen
+
+# Copy the example config (first run only)
+cp config.example.toml config.toml
+# then edit config.toml to add pexels_api_keys and an LLM provider key
+
+# Run the FastAPI server (http://127.0.0.1:8080, docs at /docs)
+uv run python main.py
+
+# In a separate terminal: run the Streamlit WebUI (http://127.0.0.1:8501)
+uv run streamlit run ./webui/Main.py --browser.gatherUsageStats=False
+```
+
+The FastAPI server and the WebUI are **parallel entry points** that share the same `app/services/*` modules — the WebUI does not call the API over HTTP. Either can run alone.
+
+### Docker
+
+```bash
+docker-compose up                            # webui + api containers
+docker-compose -f docker-compose.gpu.yml up  # GPU variant
+```
+
+Note: the Docker build context includes the LFS-backed fonts, so the Docker host needs Git LFS installed *before* the image is built.
+
+### Tests
+
+```bash
+python -m unittest discover -s test
+python -m unittest test/services/test_video.py                                    # single file
+python -m unittest test.services.test_video.TestVideoService.test_preprocess_video  # single method
+```
+
+### Project docs
+
+- [`docs/Backend.md`](docs/Backend.md) — FastAPI app, services, task pipeline, config, storage.
+- [`docs/Frontend.md`](docs/Frontend.md) — Streamlit WebUI layout, channel/idea panels, i18n.
+
+### Adding more large binaries later
+
+Anything matching `*.ttc` is already LFS-tracked (see `.gitattributes`). To track additional large file types:
+
+```bash
+git lfs track "*.mp4"
+git add .gitattributes
+# then add+commit the new binaries normally
+```
+
+To retroactively move an already-committed file into LFS, use `git lfs migrate import --include="<pattern>" --include-ref=refs/heads/main`, then `git push --force origin main`. This rewrites history — coordinate with collaborators first.
+
+---
+
 ## 功能特性 🎯
 
 - [x] 完整的 **MVC架构**，代码 **结构清晰**，易于维护，支持 `API` 和 `Web界面`
